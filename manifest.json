@@ -9,7 +9,7 @@
     "contextMenus"
   ],
   "host_permissions": [
-    "http://54.242.167.104:8080/*",
+    "http://3.90.38.82:8080/*",
     "*://mail.google.com/*"
   ],
   "action": {

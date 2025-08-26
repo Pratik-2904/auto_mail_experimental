@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Email Assistant Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        
+        .test-button {
+            background-color: #1a73e8;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        
+        .test-button:hover {
+            background-color: #1967d2;
+        }
+        
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>AI Email Assistant Test Page</h1>
+
+    <div class="test-section">
+        <h3>Test Backend Connection</h3>
+        <button class="test-button" onclick="testBackend()">Test Backend API</button>
+        <div id="backend-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test Extension Storage</h3>
+        <button class="test-button" onclick="testStorage()">Test Storage</button>
+        <button class="test-button" onclick="clearStorage()">Clear Storage</button>
+        <div id="storage-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test Different Email Content</h3>
+        <button class="test-button" onclick="testEmail1()">Test Email 1 (Professional)</button>
+        <button class="test-button" onclick="testEmail2()">Test Email 2 (Casual)</button>
+        <button class="test-button" onclick="testEmail3()">Test Email 3 (Formal)</button>
+        <div id="email-result" class="result"></div>
+    </div>
+
+    <script>
+        async function testBackend() {
+            const resultDiv = document.getElementById('backend-result');
+            resultDiv.textContent = 'Testing backend connection...';
+
+            try {
+                const response = await fetch('http://3.90.38.82:8080/api/email/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        emailBody: "This is a test email to check if the backend is working properly.",
+                        tone: "Professional"
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                resultDiv.textContent = `✅ Backend is working!\n\nResponse:\n${JSON.stringify(data, null, 2)}`;
+            } catch (error) {
+                resultDiv.textContent = `❌ Backend error: ${error.message}`;
+            }
+        }
+
+        function testStorage() {
+            const resultDiv = document.getElementById('storage-result');
+
+            if (typeof chrome !== 'undefined' && chrome.storage) {
+                chrome.storage.local.get('state', (result) => {
+                    resultDiv.textContent = `✅ Storage is working!\n\nCurrent state:\n${JSON.stringify(result.state, null, 2)}`;
+                });
+            } else {
+                resultDiv.textContent = '❌ Chrome storage not available (not running in extension context)';
+            }
+        }
+
+        function clearStorage() {
+            const resultDiv = document.getElementById('storage-result');
+
+            if (typeof chrome !== 'undefined' && chrome.storage) {
+                chrome.storage.local.clear(() => {
+                    resultDiv.textContent = '✅ Storage cleared successfully!';
+                });
+            } else {
+                resultDiv.textContent = '❌ Chrome storage not available';
+            }
+        }
+
+        async function testEmail(tone, content) {
+            const resultDiv = document.getElementById('email-result');
+            resultDiv.textContent = `Testing email with tone: ${tone}...`;
+
+            try {
+                const response = await fetch('http://3.90.38.82:8080/api/email/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        emailBody: content,
+                        tone: tone
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                resultDiv.textContent = `✅ Generated reply (${tone} tone):\n\n${data.generatedResponse}`;
+            } catch (error) {
+                resultDiv.textContent = `❌ Error: ${error.message}`;
+            }
+        }
+
+        function testEmail1() {
+            testEmail('Professional', 'Hi, I need to schedule a meeting to discuss the Q4 project timeline. When would you be available?');
+        }
+
+        function testEmail2() {
+            testEmail('Casual', 'Hey! Just wanted to check in and see how the weekend went. Any fun plans?');
+        }
+
+        function testEmail3() {
+            testEmail('Formal', 'Dear Sir/Madam, I am writing to inquire about the status of my application for the Senior Developer position. I submitted my application on October 15th and would appreciate an update.');
+        }
+    </script>
+</body>
+
+</html>

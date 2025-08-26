@@ -2,49 +2,118 @@ console.log("AI Email Assistant - Content Script Loaded");
 
 // Find the original email content from the reply/compose view
 function getEmailContent(composeView) {
-  // Try multiple selectors to find the quoted email content
-  const selectors = [
-    '.gmail_quote',
-    '[aria-label="Original message"]',
-    '.gmail_extra',
-    '.gmail_signature',
-    '.gmail_attr'
-  ];
-  
-  for (const selector of selectors) {
-    const quote = composeView.querySelector(selector);
-    if (quote) {
-      return quote.innerText.trim();
+    console.log('=== Email Content Extraction Debug ===');
+
+    // First, check if we're in a reply context by looking for reply indicators
+    const isReplyContext = document.querySelector('[aria-label*="Reply"], [aria-label*="reply"], .gmail_quote, .adn');
+    console.log('Is reply context:', !!isReplyContext);
+
+    // Try to find the original email content from the main page first (before compose view)
+    const mainPageSelectors = [
+        '.a3s', // Gmail's main message body
+        '.ii.gt', // Gmail's message content
+        '.gmail_default', // Default Gmail content
+        '.im', // Inline messages
+        '[data-legacy-message-id]', // Messages with legacy IDs
+        '.hP', // Header content
+        '.gmail_quote', // Quoted content
+        '.adn', // Gmail's quoted content container
+        '.gmail_extra', // Extra content
+        '.gmail_signature', // Signature
+        '.gmail_attr' // Attributes
+    ];
+
+    console.log('Searching for email content in main page...');
+    for (const selector of mainPageSelectors) {
+        const elements = document.querySelectorAll(selector);
+        console.log(`Selector "${selector}" found ${elements.length} elements`);
+
+        for (let i = 0; i < elements.length; i++) {
+            const element = elements[i];
+            const content = element.innerText.trim();
+            console.log(`Element ${i} with selector "${selector}" has content length: ${content.length}`);
+
+            if (content.length > 20) { // Substantial content
+                console.log('Found substantial content:', content.substring(0, 100) + '...');
+                return content;
+            }
+        }
     }
-  }
-  
-  return ""; // Return empty if it's a new email
+
+    // If no content found in main page, try within the compose view
+    console.log('Searching for email content in compose view...');
+    const composeSelectors = [
+        '.gmail_quote',
+        '[aria-label="Original message"]',
+        '.gmail_extra',
+        '.gmail_signature',
+        '.gmail_attr',
+        '.adn',
+        '.gmail_default',
+        '.im',
+        '.hP'
+    ];
+
+    for (const selector of composeSelectors) {
+        const quote = composeView.querySelector(selector);
+        if (quote) {
+            const content = quote.innerText.trim();
+            console.log(`Compose view selector "${selector}" found content length: ${content.length}`);
+            if (content.length > 10) {
+                console.log('Found email content in compose view:', content.substring(0, 100) + '...');
+                return content;
+            }
+        }
+    }
+
+    // If no quoted content found, try to get the current compose box content
+    const composeBox = composeView.querySelector('[role="textbox"][contenteditable="true"], [role="textbox"][g_editable="true"]');
+    if (composeBox) {
+        const currentContent = composeBox.innerText.trim();
+        console.log('No quoted content found, using current compose box content. Length:', currentContent.length);
+        return currentContent;
+    }
+
+    console.log('No email content found anywhere');
+
+    // Last resort: try to find any text content that might be an email
+    console.log('Trying last resort content search...');
+    const allTextElements = document.querySelectorAll('div, p, span');
+    for (const element of allTextElements) {
+        const content = element.innerText.trim();
+        if (content.length > 50 && content.includes('@')) {
+            console.log('Found potential email content in last resort search:', content.substring(0, 100) + '...');
+            return content;
+        }
+    }
+
+    return ""; // Return empty if it's a new email
 }
 
 // Get the subject of the email
 function getEmailSubject() {
-  const subjectSelectors = [
-    'h2[data-legacy-thread-id]',
-    'h2[data-thread-perm-id]',
-    '[data-test-id="message-subject"]',
-    '.h7'
-  ];
-  
-  for (const selector of subjectSelectors) {
-    const subjectElement = document.querySelector(selector);
-    if (subjectElement) {
-      return subjectElement.innerText.trim();
+    const subjectSelectors = [
+        'h2[data-legacy-thread-id]',
+        'h2[data-thread-perm-id]',
+        '[data-test-id="message-subject"]',
+        '.h7'
+    ];
+
+    for (const selector of subjectSelectors) {
+        const subjectElement = document.querySelector(selector);
+        if (subjectElement) {
+            return subjectElement.innerText.trim();
+        }
     }
-  }
-  
-  return 'No Subject';
+
+    return 'No Subject';
 }
 
 // Create and inject styles for the button
 function injectStyles() {
-  if (document.getElementById('ai-reply-styles')) return;
-  
-  const styles = `
+    if (document.getElementById('ai-reply-styles')) return;
+
+    const styles = `
     .ai-reply-button {
       display: inline-flex;
       align-items: center;
@@ -98,177 +167,189 @@ function injectStyles() {
       to { transform: rotate(360deg); }
     }
   `;
-  
-  const styleSheet = document.createElement('style');
-  styleSheet.id = 'ai-reply-styles';
-  styleSheet.textContent = styles;
-  document.head.appendChild(styleSheet);
+
+    const styleSheet = document.createElement('style');
+    styleSheet.id = 'ai-reply-styles';
+    styleSheet.textContent = styles;
+    document.head.appendChild(styleSheet);
 }
 
 // Find the compose toolbar using multiple selectors
 function findComposeToolbar(composeView) {
-  const toolbarSelectors = [
-    '.btC', // Gmail's common toolbar class
-    '[aria-label="Send"], [aria-label="Send"]', // Near send button
-    '.dC', // Div containing buttons
-    '.J-J5-Ji', // Button container
-    '.J-JN-M-I-Jm' // Another button container
-  ];
-  
-  for (const selector of toolbarSelectors) {
-    const toolbar = composeView.querySelector(selector);
-    if (toolbar) {
-      return toolbar;
+    const toolbarSelectors = [
+        '.btC', // Gmail's common toolbar class
+        '[aria-label="Send"], [aria-label="Send"]', // Near send button
+        '.dC', // Div containing buttons
+        '.J-J5-Ji', // Button container
+        '.J-JN-M-I-Jm' // Another button container
+    ];
+
+    for (const selector of toolbarSelectors) {
+        const toolbar = composeView.querySelector(selector);
+        if (toolbar) {
+            return toolbar;
+        }
     }
-  }
-  
-  return null;
+
+    return null;
 }
 
 // Find compose windows using multiple selectors
 function findComposeWindows() {
-  const composeSelectors = [
-    '.AD', // Original selector
-    '.aoI', // Compose window
-    '.nH > .nH', // Nested divs that often contain compose
-    '[role="dialog"]', // Gmail uses dialogs for compose
-    '[aria-label="Message Body"]', // Near message body
-    '.aoT' // Subject line container
-  ];
-  
-  const composeWindows = [];
-  for (const selector of composeSelectors) {
-    const elements = document.querySelectorAll(selector);
-    elements.forEach(el => {
-      // Check if this looks like a compose window
-      if (el.querySelector('[aria-label="Message Body"]') || 
-          el.querySelector('[role="textbox"]') ||
-          el.querySelector('[aria-label="To"]')) {
-        composeWindows.push(el);
-      }
-    });
-  }
-  
-  return composeWindows;
+    const composeSelectors = [
+        '.AD', // Original selector
+        '.aoI', // Compose window
+        '.nH > .nH', // Nested divs that often contain compose
+        '[role="dialog"]', // Gmail uses dialogs for compose
+        '[aria-label="Message Body"]', // Near message body
+        '.aoT' // Subject line container
+    ];
+
+    const composeWindows = [];
+    for (const selector of composeSelectors) {
+        const elements = document.querySelectorAll(selector);
+        elements.forEach(el => {
+            // Check if this looks like a compose window
+            if (el.querySelector('[aria-label="Message Body"]') ||
+                el.querySelector('[role="textbox"]') ||
+                el.querySelector('[aria-label="To"]')) {
+                composeWindows.push(el);
+            }
+        });
+    }
+
+    return composeWindows;
 }
 
 // Injects the AI Reply button into the Gmail toolbar
 function injectButton(composeView) {
-  const toolbar = findComposeToolbar(composeView);
-  if (!toolbar) return;
-  
-  // Check if button already exists
-  if (toolbar.querySelector(".ai-reply-button")) return;
-  
-  const button = document.createElement("div");
-  button.className = "ai-reply-button";
-  button.innerHTML = `<span><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.9 1 3 1.9 3 3V21C3 22.1 3.9 23 5 23H19C20.1 23 21 22.1 21 21V9H21ZM19 21H5V3H13V9H19V21Z"/></svg>AI Reply</span>`;
-  button.setAttribute("data-tooltip", "Generate AI Reply");
+    const toolbar = findComposeToolbar(composeView);
+    if (!toolbar) return;
 
-  button.addEventListener("click", () => {
-    if (button.disabled) return;
+    // Check if button already exists
+    if (toolbar.querySelector(".ai-reply-button")) return;
 
-    button.innerHTML = `<span><div class="loading-spinner"></div>Generating...</span>`;
-    button.disabled = true;
+    const button = document.createElement("div");
+    button.className = "ai-reply-button";
+    button.innerHTML = `<span><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.9 1 3 1.9 3 3V21C3 22.1 3.9 23 5 23H19C20.1 23 21 22.1 21 21V9H21ZM19 21H5V3H13V9H19V21Z"/></svg>AI Reply</span>`;
+    button.setAttribute("data-tooltip", "Generate AI Reply");
 
-    const emailBody = getEmailContent(composeView);
-    const subject = getEmailSubject();
+    button.addEventListener("click", () => {
+        if (button.disabled) return;
 
-    // Send a message to the background script to handle the API call
-    chrome.runtime.sendMessage({ 
-      type: 'GENERATE_REPLY', 
-      data: { emailBody, subject } 
-    }, (response) => {
-      if (chrome.runtime.lastError) {
-        // Handle error case
-        console.error("Extension message error:", chrome.runtime.lastError);
-        alert("Error connecting to extension. Please make sure it's properly installed.");
-        
-        // Restore button state
-        button.innerHTML = `<span><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.9 1 3 1.9 3 3V21C3 22.1 3.9 23 5 23H19C20.1 23 21 22.1 21 21V9H21ZM19 21H5V3H13V9H19V21Z"/></svg>AI Reply</span>`;
-        button.disabled = false;
-        return;
-      }
-      
-      if (response && response.success) {
-        const composeBox = composeView.querySelector('[role="textbox"][contenteditable="true"], [role="textbox"][g_editable="true"]');
-        if (composeBox) {
-          composeBox.focus();
-          // Insert the generated reply
-          document.execCommand("insertHTML", false, response.reply.replace(/\n/g, '<br>'));
-        }
-        button.classList.add('success');
-        setTimeout(() => button.classList.remove('success'), 600);
-      } else {
-        alert(`Error generating reply: ${response.error}`);
-        button.classList.add('error');
-        setTimeout(() => button.classList.remove('error'), 500);
-      }
+        button.innerHTML = `<span><div class="loading-spinner"></div>Generating...</span>`;
+        button.disabled = true;
 
-      // Restore button state
-      button.innerHTML = `<span><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.9 1 3 1.9 3 3V21C3 22.1 3.9 23 5 23H19C20.1 23 21 22.1 21 21V9H21ZM19 21H5V3H13V9H19V21Z"/></svg>AI Reply</span>`;
-      button.disabled = false;
+        const emailBody = getEmailContent(composeView);
+        const subject = getEmailSubject();
+
+        // If no email content found, use a more specific default message
+        const finalEmailBody = emailBody || "No email content detected. Please make sure you're replying to an email or provide the context you'd like me to respond to.";
+
+        console.log('Button clicked - Email data:', {
+            emailBody: finalEmailBody,
+            emailBodyLength: finalEmailBody ? finalEmailBody.length : 0,
+            subject: subject,
+            originalEmailBody: emailBody
+        });
+
+        // Send a message to the background script to handle the API call
+        chrome.runtime.sendMessage({
+            type: 'GENERATE_REPLY',
+            data: { emailBody: finalEmailBody, subject }
+        }, (response) => {
+            if (chrome.runtime.lastError) {
+                // Handle error case
+                console.error("Extension message error:", chrome.runtime.lastError);
+                alert("Error connecting to extension. Please make sure it's properly installed.");
+
+                // Restore button state
+                button.innerHTML = `<span><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.9 1 3 1.9 3 3V21C3 22.1 3.9 23 5 23H19C20.1 23 21 22.1 21 21V9H21ZM19 21H5V3H13V9H19V21Z"/></svg>AI Reply</span>`;
+                button.disabled = false;
+                return;
+            }
+
+            if (response && response.success) {
+                console.log('Received successful response:', response.reply);
+                const composeBox = composeView.querySelector('[role="textbox"][contenteditable="true"], [role="textbox"][g_editable="true"]');
+                if (composeBox) {
+                    composeBox.focus();
+                    // Insert the generated reply
+                    document.execCommand("insertHTML", false, response.reply.replace(/\n/g, '<br>'));
+                }
+                button.classList.add('success');
+                setTimeout(() => button.classList.remove('success'), 600);
+            } else {
+                console.error('Error response:', response);
+                alert(`Error generating reply: ${response.error}`);
+                button.classList.add('error');
+                setTimeout(() => button.classList.remove('error'), 500);
+            }
+
+            // Restore button state
+            button.innerHTML = `<span><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.9 1 3 1.9 3 3V21C3 22.1 3.9 23 5 23H19C20.1 23 21 22.1 21 21V9H21ZM19 21H5V3H13V9H19V21Z"/></svg>AI Reply</span>`;
+            button.disabled = false;
+        });
     });
-  });
 
-  // Try to insert before the send button, or just at the beginning
-  const sendButton = toolbar.querySelector('[aria-label="Send"][role="button"], [data-tooltip="Send"]');
-  if (sendButton) {
-    toolbar.insertBefore(button, sendButton);
-  } else {
-    toolbar.insertBefore(button, toolbar.firstChild);
-  }
+    // Try to insert before the send button, or just at the beginning
+    const sendButton = toolbar.querySelector('[aria-label="Send"][role="button"], [data-tooltip="Send"]');
+    if (sendButton) {
+        toolbar.insertBefore(button, sendButton);
+    } else {
+        toolbar.insertBefore(button, toolbar.firstChild);
+    }
 }
 
 // Check if extension is enabled
 function checkExtensionState() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get('state', (result) => {
-      resolve(result.state && result.state.isEnabled);
+    return new Promise((resolve) => {
+        chrome.storage.local.get('state', (result) => {
+            resolve(result.state && result.state.isEnabled);
+        });
     });
-  });
 }
 
 // Main function to initialize the extension
 async function initializeExtension() {
-  // Inject styles first
-  injectStyles();
-  
-  // Check if extension is enabled
-  const isEnabled = await checkExtensionState();
-  if (!isEnabled) return;
-  
-  // Find and process compose windows
-  const composeWindows = findComposeWindows();
-  composeWindows.forEach(injectButton);
+    // Inject styles first
+    injectStyles();
+
+    // Check if extension is enabled
+    const isEnabled = await checkExtensionState();
+    if (!isEnabled) return;
+
+    // Find and process compose windows
+    const composeWindows = findComposeWindows();
+    composeWindows.forEach(injectButton);
 }
 
 // Observer to detect when a compose/reply window appears on the page
 const observer = new MutationObserver(() => {
-  initializeExtension();
+    initializeExtension();
 });
 
 // Start observing when DOM is ready
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', () => {
+        observer.observe(document.body, { childList: true, subtree: true });
+        // Initial check
+        setTimeout(initializeExtension, 1000);
+    });
+} else {
     observer.observe(document.body, { childList: true, subtree: true });
     // Initial check
     setTimeout(initializeExtension, 1000);
-  });
-} else {
-  observer.observe(document.body, { childList: true, subtree: true });
-  // Initial check
-  setTimeout(initializeExtension, 1000);
 }
 
 // Listen for messages from popup to enable/disable button injection
 chrome.runtime.onMessage.addListener((request) => {
-  if (request.type === 'TOGGLE_EXTENSION') {
-    if (!request.isEnabled) {
-      document.querySelectorAll(".ai-reply-button").forEach(btn => btn.remove());
-    } else {
-      // Re-initialize if enabled
-      initializeExtension();
+    if (request.type === 'TOGGLE_EXTENSION') {
+        if (!request.isEnabled) {
+            document.querySelectorAll(".ai-reply-button").forEach(btn => btn.remove());
+        } else {
+            // Re-initialize if enabled
+            initializeExtension();
+        }
     }
-  }
 });
